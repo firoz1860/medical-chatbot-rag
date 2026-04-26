@@ -232,4 +232,4 @@ npm run build
 ## 👨‍💻 Author
 
 **Firoz Ahmad**  
-[GitHub](https://github.com/firoz1860) · [LinkedIn](https://linkedin.com/in/firoz-ahmad)
+[GitHub](https://github.com/firoz1860) · [LinkedIn](https://www.linkedin.com/in/firoz-ahmad-020166251/)
