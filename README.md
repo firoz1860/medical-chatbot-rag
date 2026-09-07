@@ -1,235 +1,49 @@
-# 🏥 MedBot — AI Medical Chatbot (RAG Architecture)
+# MedBot ? Medical RAG Chatbot
 
-A production-ready full-stack medical chatbot powered by **Retrieval-Augmented Generation (RAG)**. Upload medical PDFs and ask domain-specific questions — MedBot retrieves relevant context from your documents and generates accurate, grounded answers using GPT-4o.
-![alt text](image.png)
+A React and Flask medical-document chatbot. The core pipeline remains unchanged: it creates SentenceTransformer embeddings, retrieves matching Pinecone chunks, and asks the configured OpenAI model to answer only from that medical context.
 
-![Tech Stack](https://img.shields.io/badge/Stack-MERN%20%2B%20Python%20%2B%20RAG-blue)
-![Python](https://img.shields.io/badge/Python-3.11+-green)
-![React](https://img.shields.io/badge/React-18-blue)
+## Local development
 
----
+### Backend
 
-## 🏗️ Project Structure
-
-```
-medical-chatbot-rag/
-├── backend/                        # Python Flask API
-│   ├── app.py                      # Flask entry point
-│   ├── config.py                   # Environment config
-│   ├── requirements.txt            # Python dependencies
-│   ├── .env.example                # Environment variable template
-│   ├── routes/
-│   │   ├── chat.py                 # POST /api/chat
-│   │   └── upload.py               # POST /api/upload
-│   ├── services/
-│   │   ├── rag_service.py          # Core RAG orchestration
-│   │   ├── embeddings.py           # HuggingFace embeddings
-│   │   └── pinecone_service.py     # Pinecone vector DB
-│   └── utils/
-│       └── pdf_processor.py        # PDF parsing & chunking
-│
-├── frontend/                       # React + Vite + Tailwind
-│   ├── index.html
-│   ├── vite.config.js
-│   ├── tailwind.config.js
-│   └── src/
-│       ├── App.jsx                 # Root layout
-│       ├── main.jsx
-│       ├── index.css
-│       ├── components/
-│       │   ├── ChatWindow.jsx      # Message list
-│       │   ├── MessageBubble.jsx   # Individual message
-│       │   ├── InputBar.jsx        # Text input + send
-│       │   └── UploadPanel.jsx     # PDF upload sidebar
-│       ├── hooks/
-│       │   └── useChat.js          # Chat state management
-│       └── services/
-│           └── api.js              # Axios API calls
-│
-├── .gitignore
-└── README.md
-```
-
----
-
-## ⚙️ How RAG Works Here
-
-```
-User Question
-     │
-     ▼
-Embed question (HuggingFace all-MiniLM-L6-v2)
-     │
-     ▼
-Semantic search in Pinecone (top-5 chunks)
-     │
-     ▼
-Inject context + question → GPT-4o
-     │
-     ▼
-Grounded, accurate medical answer
-```
-
----
-
-## 🚀 Setup & Installation
-
-### Prerequisites
-- Python 3.11+
-- Node.js 18+
-- [OpenAI API Key](https://platform.openai.com/api-keys)
-- [Pinecone API Key](https://www.pinecone.io/) (free tier works)
-
----
-
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com/firoz1860/medical-chatbot-rag.git
-cd medical-chatbot-rag
-```
-
----
-
-### 2. Backend Setup
-
-```bash
+```powershell
 cd backend
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Configure environment
-cp .env.example .env
-# Edit .env and add your API keys
-
-# Go to project backend folder
-cd "D:\Genrative Ai\project\medical-chatbot-rag\backend"
-
-# Delete old broken venv if exists
-Remove-Item -Recurse -Force venv
-
-# Create new virtual environment using Python 3.12
-py -3.12 -m venv venv
-
-# Activate virtual environment
-.\venv\Scripts\Activate
-
-# Check python version (should be Python 3.12.x)
-python --version
-
-# Upgrade pip
-pip install --upgrade pip
-
-# Install all requirements
-pip install -r requirements.txt
-
-# Run backend (example)
-python app.py
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt pytest
+Copy-Item .env.example .env
 ```
 
-**Edit `.env`:**
-```env
-OPENAI_API_KEY=sk-your-openai-key-here
-PINECONE_API_KEY=your-pinecone-key-here
-PINECONE_ENV=us-east-1
-PINECONE_INDEX=medical-chatbot
+Set `OPENAI_API_KEY` and `PINECONE_API_KEY` in `backend/.env`, then run:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest tests -v
+.\.venv\Scripts\python.exe app.py
 ```
 
-```bash
-# Run the backend
-python app.py
-# API running at http://localhost:5000
-```
+The API listens on `http://localhost:5000`; readiness is `GET /api/health` and does not initialize OpenAI, Pinecone, or the embedding model.
 
----
+### Frontend
 
-### 3. Frontend Setup
-
-```bash
-cd ../frontend
-
-# Install dependencies
-npm install
-
-# Configure environment
-cp .env.example .env
-# VITE_API_URL=http://localhost:5000/api  (default is fine for local dev)
-
-# Start dev server
-npm run dev
-# App running at http://localhost:5173
-```
-
----
-
-## 📡 API Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/health` | Health check |
-| POST | `/api/chat` | Send a question, get RAG answer |
-| POST | `/api/upload` | Upload and index a medical PDF |
-| DELETE | `/api/delete/<doc_name>` | Remove document from knowledge base |
-
-### POST `/api/chat`
-```json
-{
-  "question": "What are the symptoms of Type 2 diabetes?",
-  "chat_history": []
-}
-```
-**Response:**
-```json
-{
-  "answer": "Type 2 diabetes symptoms include...",
-  "sources_found": true,
-  "chunks_used": 4,
-  "model": "gpt-4o"
-}
-```
-
----
-
-## 🌐 Deployment
-
-### Backend → Render / Railway / EC2
-```bash
-# Render: set environment variables in dashboard
-# Start command:
-gunicorn app:app --bind 0.0.0.0:5000
-```
-
-### Frontend → Vercel
-```bash
+```powershell
 cd frontend
-npm run build
-# Connect GitHub repo to Vercel
-# Set VITE_API_URL to your deployed backend URL
+npm ci
+Copy-Item .env.example .env
+npm test
+npm run dev
 ```
 
----
+Set `VITE_API_URL` to the API base ending in `/api`; the default is the local Flask API.
 
-## 🛠️ Tech Stack
+## Deployment
 
-| Layer | Technology |
-|-------|-----------|
-| Frontend | React 18, Vite, Tailwind CSS |
-| Backend | Python 3.11, Flask, Flask-CORS |
-| Embeddings | HuggingFace `all-MiniLM-L6-v2` |
-| Vector DB | Pinecone (Serverless) |
-| LLM | OpenAI GPT-4o |
-| Orchestration | LangChain |
-| PDF Parsing | PyMuPDF |
-| Deployment | Vercel (FE), Render/EC2 (BE) |
+- Render uses `render.yaml` to host the Flask API from `backend/` with Gunicorn.
+- Vercel hosts the Vite SPA from `frontend/`; `vercel.json` rewrites SPA routes to `index.html`.
+- Add `OPENAI_API_KEY`, `PINECONE_API_KEY`, and a Vercel-only `CORS_ORIGINS` value in Render.
+- Add `VITE_API_URL` in Vercel, set to the public Render API URL ending in `/api`.
+- To enable GitHub Actions deployment, add `RENDER_DEPLOY_HOOK_URL`, `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`, and `VITE_API_URL` as repository secrets.
 
----
+CI runs tests and a fresh frontend build on pull requests and `main`. Deploy jobs run only after successful CI on `main` and skip safely until their provider secrets are configured.
 
-## 👨‍💻 Author
+## Safety
 
-**Firoz Ahmad**  
-[GitHub](https://github.com/firoz1860) · [LinkedIn](https://www.linkedin.com/in/firoz-ahmad-020166251/)
+MedBot can make mistakes and is not a substitute for a licensed medical professional. Upload only documents you are authorized to process.

@@ -1,67 +1,67 @@
 import os
-import traceback
-from flask import Blueprint, request, jsonify, current_app
-from services.rag_service import process_and_index_pdf
-from services.pinecone_service import delete_document_chunks
+from pathlib import Path
+from uuid import uuid4
 
-upload_bp = Blueprint('upload', __name__)
-
-ALLOWED_EXTENSIONS = {'pdf'}
-
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+from flask import Blueprint, current_app, jsonify, request
+from werkzeug.utils import secure_filename
 
 
-@upload_bp.route('/upload', methods=['POST'])
+upload_bp = Blueprint("upload", __name__)
+ALLOWED_EXTENSIONS = {"pdf"}
+
+
+def allowed_file(filename: str) -> bool:
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+@upload_bp.post("/upload")
 def upload_pdf():
-    filepath = None
+    temporary_path = None
     try:
-        if 'file' not in request.files:
-            return jsonify({'error': 'No file provided'}), 400
+        if "file" not in request.files:
+            return jsonify({"error": "No file provided"}), 400
 
-        file = request.files['file']
-
+        file = request.files["file"]
         if not file.filename:
-            return jsonify({'error': 'No file selected'}), 400
+            return jsonify({"error": "No file selected"}), 400
 
-        if not allowed_file(file.filename):
-            return jsonify({'error': 'Only PDF files are allowed'}), 400
+        document_name = secure_filename(file.filename)
+        if not document_name or not allowed_file(document_name):
+            return jsonify({"error": "Only PDF files are allowed"}), 400
 
-        # Sanitise filename for filesystem + Pinecone IDs
-        filename = file.filename.replace(' ', '_')
-        upload_folder = current_app.config['UPLOAD_FOLDER']
-        filepath = os.path.join(upload_folder, filename)
-        file.save(filepath)
+        upload_folder = Path(current_app.config["UPLOAD_FOLDER"])
+        temporary_path = upload_folder / f"{uuid4().hex}-{document_name}"
+        file.save(temporary_path)
 
-        result = process_and_index_pdf(filepath, filename)
-
+        result = current_app.config["PROCESS_AND_INDEX_PDF"](str(temporary_path), document_name)
         return jsonify({
-            'message': f'Successfully indexed {filename}',
-            'chunks_indexed': result['chunks_indexed'],
-            'document': result['document'],
+            "message": f"Successfully indexed {result['document']}",
+            "chunks_indexed": result["chunks_indexed"],
+            "document": result["document"],
         }), 200
-
-    except Exception as e:
-        # Always print the full traceback so errors are visible in the console
-        print(f"[Upload ERROR] {type(e).__name__}: {e}")
-        traceback.print_exc()
-        status = 422 if isinstance(e, ValueError) else 500
-        return jsonify({'error': str(e)}), status
-
+    except ValueError:
+        current_app.logger.info("Uploaded PDF could not be processed", exc_info=True)
+        return jsonify({"error": "The PDF could not be processed."}), 422
+    except Exception:
+        current_app.logger.exception("PDF upload failed")
+        return jsonify({"error": "The upload could not be completed. Please try again."}), 500
     finally:
-        # Always clean up the temp file if it was saved
-        if filepath and os.path.exists(filepath):
+        if temporary_path:
             try:
-                os.remove(filepath)
-            except OSError:
+                os.remove(temporary_path)
+            except FileNotFoundError:
                 pass
+            except OSError:
+                current_app.logger.warning("Could not remove temporary upload: %s", temporary_path)
 
 
-@upload_bp.route('/delete/<doc_name>', methods=['DELETE'])
-def delete_document(doc_name):
+@upload_bp.delete("/delete/<doc_name>")
+def delete_document(doc_name: str):
+    if not doc_name.strip():
+        return jsonify({"error": "Document name is required"}), 400
     try:
-        delete_document_chunks(doc_name)
-        return jsonify({'message': f'Deleted {doc_name} from knowledge base'}), 200
-    except Exception as e:
-        print(f"[Delete ERROR] {e}")
-        return jsonify({'error': str(e)}), 500
+        current_app.config["DELETE_DOCUMENT_CHUNKS"](doc_name)
+        return jsonify({"message": f"Deleted {doc_name} from knowledge base"}), 200
+    except Exception:
+        current_app.logger.exception("Document deletion failed")
+        return jsonify({"error": "The document could not be deleted. Please try again."}), 500
